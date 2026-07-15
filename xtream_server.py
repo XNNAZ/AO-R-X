@@ -176,10 +176,9 @@ def play_movie(username, password, stream_id):
         return "Stream not found", 404
 
 
+# Load the M3U file immediately when the app is imported/started
+load_m3u_file()
+
 if __name__ == '__main__':
-    # 1. Load the M3U file into memory before starting the server
-    load_m3u_file()
-    
-    # 2. Run the Xtream Server
-    # Ensure this port (8080) is different from your Scraper Server port (usually 5000)
-    app.run(host='0.0.0.0', port=8081)
+    # This is only used for local development running: python app.py
+    app.run(host='0.0.0.0', port=8080, debug=True)
