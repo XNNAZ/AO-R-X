@@ -1,1 +1,1 @@
-web: xtream_server:app
+web: gunicorn xtream_server:app
