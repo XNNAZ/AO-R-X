@@ -1,27 +1,52 @@
-from flask import Flask, jsonify, redirect, request
 import os
 import re
+from flask import Flask, jsonify, redirect, request
 
 app = Flask(__name__)
 
 M3U_FILE_PATH = "playlist.m3u"
 
-# In-memory storage broken down by stream type
+# Isolated memory stores for streams and categories
 STREAMS = {"live": {}, "vod": {}, "series": {}}
 
 CATEGORIES = {"live": {}, "vod": {}, "series": {}}
 
 
 def classify_category(group_title):
-    """Determines whether an entry belongs to Live, VOD, or Series based on group tags."""
+    """Refined classification logic based on group-title keywords."""
     gt = group_title.lower()
-    if any(keyword in gt for keyword in ["series", "season", "s0", "tv show"]):
+
+    # Keywords for Series
+    series_keywords = [
+        "series",
+        "season",
+        "s0",
+        "s1",
+        "s2",
+        "s3",
+        "tv show",
+        "shows",
+        "episodes",
+    ]
+    if any(kw in gt for kw in series_keywords):
         return "series"
-    elif any(
-        keyword in gt for keyword in ["movie", "vod", "cinema", "films", "4k"]
-    ):
+
+    # Keywords for VOD / Movies
+    vod_keywords = [
+        "movie",
+        "vod",
+        "cinema",
+        "films",
+        "4k movie",
+        "action",
+        "comedy",
+        "drama",
+        "documentary",
+    ]
+    if any(kw in gt for kw in vod_keywords):
         return "vod"
-    # Default to live if no explicit movie/series hints are found
+
+    # Default fallback to live
     return "live"
 
 
@@ -61,7 +86,7 @@ def load_m3u_file():
             name = line.split(",")[-1].strip()
             stype = classify_category(cat_name)
 
-            # Assign Category ID within its specific type pool
+            # Isolated Category ID assignment per media pool
             cat_dict = CATEGORIES[stype]
             if cat_name not in cat_dict.values():
                 cat_id = str(counters[stype]["cat"])
@@ -100,7 +125,7 @@ def xtream_api():
     action = request.args.get("action")
     username = request.args.get("username", "admin")
 
-    # 1. Login / Server Handshake
+    # 1. Login Authorization Response
     if not action:
         return jsonify({
             "user_info": {
@@ -121,17 +146,35 @@ def xtream_api():
             },
         })
 
-    # 2. Category Handlers
-    category_map = {
-        "get_live_categories": "live",
-        "get_vod_categories": "vod",
-        "get_series_categories": "series",
-    }
-    if action in category_map:
-        stype = category_map[action]
+    # 2. Category Handlers (Strictly filtered so categories don't leak)
+    if action == "get_live_categories":
+        active_live_cat_ids = {
+            data["category_id"] for data in STREAMS["live"].values()
+        }
         return jsonify([
             {"category_id": cid, "category_name": cname, "parent_id": 0}
-            for cid, cname in CATEGORIES[stype].items()
+            for cid, cname in CATEGORIES["live"].items()
+            if cid in active_live_cat_ids
+        ])
+
+    if action == "get_vod_categories":
+        active_vod_cat_ids = {
+            data["category_id"] for data in STREAMS["vod"].values()
+        }
+        return jsonify([
+            {"category_id": cid, "category_name": cname, "parent_id": 0}
+            for cid, cname in CATEGORIES["vod"].items()
+            if cid in active_vod_cat_ids
+        ])
+
+    if action == "get_series_categories":
+        active_series_cat_ids = {
+            data["category_id"] for data in STREAMS["series"].values()
+        }
+        return jsonify([
+            {"category_id": cid, "category_name": cname, "parent_id": 0}
+            for cid, cname in CATEGORIES["series"].items()
+            if cid in active_series_cat_ids
         ])
 
     # 3. Stream List Handlers
@@ -187,7 +230,6 @@ def get_m3u_playlist():
     lines = ["#EXTM3U"]
     base_url = request.host_url.rstrip("/")
 
-    # Build M3U with proper route prefix for each media type
     for stype in ["live", "vod", "series"]:
         route_prefix = (
             "live"
@@ -210,12 +252,11 @@ def get_m3u_playlist():
     return "\n".join(lines), 200, {"Content-Type": "application/x-mpegurl"}
 
 
-# 4. Universal Playback Redirect (Live, Movies, Series)
+# 4. Universal Playback Redirect
 @app.route("/<stream_type>/<username>/<password>/<stream_id>")
 def play_media(stream_type, username, password, stream_id):
     clean_id = re.sub(r"\D", "", stream_id.split(".")[0])
 
-    # Convert route to internal storage key
     type_map = {"live": "live", "movie": "vod", "series": "series"}
     stype = type_map.get(stream_type, "live")
 
