@@ -1,6 +1,6 @@
+from flask import Flask, jsonify, redirect, request
 import os
 import re
-from flask import Flask, jsonify, redirect, request
 
 app = Flask(__name__)
 
@@ -99,25 +99,35 @@ def load_all_m3u_files():
 def xtream_api():
     action = request.args.get("action")
     username = request.args.get("username", "admin")
+    password = request.args.get("password", "admin")
 
-    # 1. Login Authentication
+    # 1. Login Authentication (Fixed for IPTV Smarters, TiviMate, and XCIPTV compatibility)
     if not action:
+        host = request.host.split(":")[0]
         return jsonify({
             "user_info": {
                 "auth": 1,
                 "status": "Active",
                 "username": username,
-                "exp_date": "null",
+                "password": password,
+                "message": "Welcome",
+                "auth_date": 1600000000,
+                "exp_date": "1988121600",  # Timestamp in far future to mark account as Active
                 "is_trial": "0",
+                "active_cons": "0",
+                "created_at": "1600000000",
+                "max_connections": "100",
+                "allowed_output_formats": ["m3u8", "ts", "mp4", "mkv"],
             },
             "server_info": {
-                "url": request.host.split(":")[0],
-                "port": (
-                    request.host.split(":")[1]
-                    if ":" in request.host
-                    else "80"
-                ),
+                "url": host,
+                "port": "80",
+                "https_port": "443",
                 "server_protocol": "http",
+                "rtmp_port": "8880",
+                "timezone": "UTC",
+                "timestamp_now": 1600000000,
+                "time_now": "2026-07-20 05:00:00",
             },
         })
 
